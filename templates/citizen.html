@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPCA80 - เรียกสายตรวจ</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/citizen.css') }}">
+</head>
+<body>
+    <div id="app" class="citizen-app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🚨 RPCA80 เรียกสายตรวจ</h1>
+                <div class="header-right">
+                    <span class="user-info" id="userInfo"></span>
+                    <a href="/logout" class="logout-btn">ออก</a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Demo Warning -->
+        <div class="demo-banner">
+            ⚠️ <strong>ต้นแบบระบบ:</strong> ไม่ใช่ระบบราชการที่ได้รับการรับรอง สำหรับเหตุฉุกเฉินจริงโทร 191
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- GPS Status Section -->
+            <section class="gps-section">
+                <div class="card">
+                    <h2>📍 ตำแหน่งของคุณ</h2>
+
+                    <div class="gps-status" id="gpsStatus">
+                        <div class="status-loading">
+                            <div class="spinner"></div>
+                            <p>กำลังขอตำแหน่ง GPS...</p>
+                        </div>
+                    </div>
+
+                    <div id="gpsDetails" class="gps-details" style="display: none;">
+                        <div class="detail-row">
+                            <label>ละติจูด (Latitude):</label>
+                            <code id="latitudeValue">-</code>
+                        </div>
+                        <div class="detail-row">
+                            <label>ลองจิจูด (Longitude):</label>
+                            <code id="longitudeValue">-</code>
+                        </div>
+                        <div class="detail-row">
+                            <label>ความแม่นยำ:</label>
+                            <code id="accuracyValue">-</code>
+                        </div>
+                        <div class="detail-row">
+                            <label>ได้รับเมื่อ:</label>
+                            <code id="timestampValue">-</code>
+                        </div>
+                    </div>
+
+                    <div id="gpsWarnings" class="gps-warnings"></div>
+                </div>
+            </section>
+
+            <!-- Map Section -->
+            <section class="map-section">
+                <div class="card">
+                    <h2>🗺️ แผนที่</h2>
+                    <div id="map" class="map-container"></div>
+                    <p class="map-help">คลิกบนแผนที่เพื่อเลือกตำแหน่งด้วยตนเอง</p>
+                </div>
+            </section>
+
+            <!-- SOS Button Section -->
+            <section class="sos-section">
+                <div class="card">
+                    <h2>📞 เรียกสายตรวจ</h2>
+
+                    <!-- Swipe to Call -->
+                    <div class="swipe-container">
+                        <div class="swipe-bar" id="swipeBar">
+                            <div class="swipe-icon">👉</div>
+                            <span class="swipe-text">ปัดจากซ้ายไปขวาเพื่อเรียก</span>
+                        </div>
+                    </div>
+
+                    <!-- Alternative: Button -->
+                    <div class="button-container">
+                        <button id="callButton" class="call-button" style="display: none;">
+                            📞 เรียกสายตรวจ
+                        </button>
+                    </div>
+
+                    <label class="checkbox">
+                        <input type="checkbox" id="enableButtonToggle">
+                        <span>ใช้ปุ่มแทนการปัด (เข้าถึงได้ง่ายกว่า)</span>
+                    </label>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Incident Report Modal -->
+    <div id="reportModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🚨 ส่งรายงานเหตุ</h2>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Step 1: Type -->
+                <div id="step1" class="step active">
+                    <h3>ประเภทเหตุ</h3>
+                    <div class="incident-types">
+                        <button class="type-btn" data-type="accident">🚗 อุบัติเหตุ</button>
+                        <button class="type-btn" data-type="medical">🏥 บุคคลต้องการความช่วยเหลือ</button>
+                        <button class="type-btn" data-type="dispute">⚠️ ทะเลาะวิวาท</button>
+                        <button class="type-btn" data-type="suspicious">🕵️ บุคคลหรือทรัพย์สินน่าสงสัย</button>
+                        <button class="type-btn" data-type="other">📋 อื่น ๆ</button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Details -->
+                <div id="step2" class="step" style="display: none;">
+                    <h3>รายละเอียดเพิ่มเติม</h3>
+                    <textarea id="detailsInput" placeholder="อธิบายรายละเอียดของเหตุการณ์ (ไม่บังคับ)" rows="4"></textarea>
+                    <label class="checkbox">
+                        <input type="checkbox" id="noDetailsCheckbox">
+                        <span>ไม่มีรายละเอียดเพิ่มเติม</span>
+                    </label>
+                </div>
+
+                <!-- Step 3: Confirm -->
+                <div id="step3" class="step" style="display: none;">
+                    <h3>ยืนยันตำแหน่ง</h3>
+                    <div id="confirmMap" class="confirm-map"></div>
+                    <div class="location-info">
+                        <p><strong>ประเภท:</strong> <span id="confirmType"></span></p>
+                        <p><strong>ตำแหน่ง:</strong> <span id="confirmLocation"></span></p>
+                        <p><strong>ความแม่นยำ:</strong> <span id="confirmAccuracy"></span></p>
+                        <p><strong>ที่มา:</strong> <span id="confirmSource"></span></p>
+                    </div>
+                </div>
+
+                <!-- Step 4: Success -->
+                <div id="step4" class="step" style="display: none;">
+                    <div class="success-message">
+                        <div class="success-icon">✓</div>
+                        <h3>ส่งรายงานสำเร็จ</h3>
+                        <p>ขอบคุณที่แจ้งหน่วยงาน</p>
+                        <div class="reference-code">
+                            <label>เลขอ้างอิง:</label>
+                            <strong id="referenceCode"></strong>
+                        </div>
+                        <p class="status-note" id="statusNote">รอเจ้าหน้าที่รับเรื่อง...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer" id="modalFooter">
+                <button class="btn-secondary" id="backBtn" style="display: none;" onclick="previousStep()">กลับ</button>
+                <button class="btn-secondary" id="cancelBtn" onclick="closeModal()">ยกเลิก</button>
+                <button class="btn-primary" id="nextBtn" onclick="nextStep()">ถัดไป</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Dialog -->
+    <div id="confirmDialog" class="modal" style="display: none;">
+        <div class="modal-content small">
+            <h3>ยืนยันการเรียก</h3>
+            <p>กดยืนยันเพื่อส่งรายงานไปยังเจ้าหน้าที่</p>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="cancelConfirm()">ยกเลิก</button>
+                <button class="btn-primary" onclick="submitIncident()">ยืนยันเรียกตำรวจ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/citizen.js') }}"></script>
+</body>
+</html>

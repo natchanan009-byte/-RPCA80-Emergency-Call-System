@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPCA80 - เข้าสู่ระบบ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo h1 {
+            color: #1e3c72;
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .logo p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .demo-warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #856404;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #2a5298;
+            box-shadow: 0 0 0 3px rgba(42, 82, 152, 0.1);
+        }
+
+        .error-message {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(42, 82, 152, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .demo-accounts {
+            background-color: #f0f4f8;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .demo-accounts h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .account {
+            margin-bottom: 8px;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+        }
+
+        .account strong {
+            display: block;
+            color: #1e3c72;
+        }
+
+        .account code {
+            font-family: 'Courier New', monospace;
+            background: #e8eef7;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .emergency-notice {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 12px;
+            margin-top: 20px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #721c24;
+        }
+
+        .emergency-notice strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">
+            <h1>🚨 RPCA80</h1>
+            <p>ระบบเรียกสายตรวจ 24 ชั่วโมง</p>
+        </div>
+
+        <div class="demo-warning">
+            ⚠️ <strong>ต้นแบบระบบ:</strong> นี่เป็นระบบต้นแบบเพื่อการสาธิต ไม่ใช่ระบบราชการที่ได้รับการรับรอง
+        </div>
+
+        {% if error %}
+        <div class="error-message">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST">
+            <div class="form-group">
+                <label for="username">ชื่อผู้ใช้</label>
+                <input type="text" id="username" name="username" placeholder="กรุณากรอกชื่อผู้ใช้" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="password">รหัสผ่าน</label>
+                <input type="password" id="password" name="password" placeholder="กรุณากรอกรหัสผ่าน" required>
+            </div>
+
+            <button type="submit">เข้าสู่ระบบ</button>
+        </form>
+
+        <div class="demo-accounts">
+            <h4>🔑 บัญชี Demo (สำหรับการทดสอบ)</h4>
+
+            <div class="account">
+                <strong>เจ้าหน้าที่ห้องวิทยุ:</strong>
+                ชื่อผู้ใช้: <code>RPCA80</code><br>
+                รหัสผ่าน: <code>RPCA6480</code>
+            </div>
+
+            <div class="account">
+                <strong>ประชาชน:</strong>
+                ชื่อผู้ใช้: <code>test1234</code><br>
+                รหัสผ่าน: <code>12345678</code>
+            </div>
+        </div>
+
+        <div class="emergency-notice">
+            <strong>🆘 เหตุฉุกเฉิน:</strong>
+            หากเป็นเหตุฉุกเฉินจริง โปรดติดต่อ 191 หรือท้องที่บริการตำรวจจังหวัด ตามสถานที่เกิดเหตุ
+        </div>
+    </div>
+</body>
+</html>

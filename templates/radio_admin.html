@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPCA80 - ห้องวิทยุ</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/radio_admin.css') }}">
+</head>
+<body>
+    <div id="app" class="radio-admin-app">
+        <!-- Header -->
+        <header class="header">
+            <h1>📡 RPCA80 - ห้องวิทยุ</h1>
+            <div class="header-right">
+                <span class="user-info">
+                    👤 <span id="userInfo"></span>
+                </span>
+                <button class="sound-toggle" id="soundToggle" title="เปิด/ปิดเสียง">
+                    🔔 เสียงเปิด
+                </button>
+                <a href="/logout" class="logout-btn">ออก</a>
+            </div>
+        </header>
+
+        <!-- Demo Warning -->
+        <div class="demo-banner">
+            ⚠️ <strong>ต้นแบบระบบ:</strong> สำหรับการสาธิตเท่านั้น
+        </div>
+
+        <div class="container">
+            <!-- Sidebar Stats -->
+            <aside class="sidebar">
+                <div class="stats-card">
+                    <div class="stat-item">
+                        <span class="stat-label">เหตุใหม่</span>
+                        <span class="stat-value" id="countNew">0</span>
+                    </div>
+                </div>
+                <div class="stats-card">
+                    <div class="stat-item">
+                        <span class="stat-label">รับแล้ว</span>
+                        <span class="stat-value" id="countAccepted">0</span>
+                    </div>
+                </div>
+                <div class="stats-card">
+                    <div class="stat-item">
+                        <span class="stat-label">ดำเนินการ</span>
+                        <span class="stat-value" id="countResponding">0</span>
+                    </div>
+                </div>
+                <div class="stats-card">
+                    <div class="stat-item">
+                        <span class="stat-label">ปิด</span>
+                        <span class="stat-value" id="countClosed">0</span>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Toolbar -->
+                <div class="toolbar">
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="ค้นหาเลขเหตุ...">
+                    </div>
+                    <div class="filter-group">
+                        <select id="statusFilter">
+                            <option value="">ทุกสถานะ</option>
+                            <option value="new">เหตุใหม่</option>
+                            <option value="accepted">รับแล้ว</option>
+                            <option value="responding">ดำเนินการ</option>
+                            <option value="arrived">ถึงแล้ว</option>
+                            <option value="closed">ปิด</option>
+                            <option value="cancelled">ยกเลิก</option>
+                        </select>
+                    </div>
+                    <button class="btn-export" id="exportBtn">📥 ส่งออก CSV</button>
+                </div>
+
+                <!-- Map Section -->
+                <section class="map-section">
+                    <div id="mapContainer" class="map-container"></div>
+                </section>
+
+                <!-- Incidents List -->
+                <section class="incidents-section">
+                    <h2>รายการเหตุการณ์</h2>
+                    <div id="incidentsList" class="incidents-list">
+                        <div class="empty-state">
+                            <p>📭 ไม่มีเหตุการณ์</p>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Incident Detail Modal -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content full">
+            <div class="modal-header">
+                <h2>📋 รายละเอียดเหตุการณ์</h2>
+                <button class="close-btn" onclick="closeDetailModal()">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="incident-detail" id="incidentDetail">
+                    <!-- Loaded by JS -->
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <div id="actionButtons" class="action-buttons">
+                    <!-- Loaded by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cancel Reason Dialog -->
+    <div id="cancelDialog" class="modal" style="display: none;">
+        <div class="modal-content small">
+            <h3>ยกเลิกเหตุการณ์</h3>
+            <textarea id="cancelReason" placeholder="เหตุผลในการยกเลิก..." rows="3"></textarea>
+            <div class="button-group">
+                <button class="btn-secondary" onclick="closeCancelDialog()">กลับ</button>
+                <button class="btn-danger" onclick="confirmCancel()">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio for notification (hidden) -->
+    <audio id="notificationSound" preload="auto">
+        <source src="data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA==" type="audio/wav">
+    </audio>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/radio_admin.js') }}"></script>
+</body>
+</html>
