@@ -1,13 +1,15 @@
-/* RPCA80 Radio Admin Dashboard JavaScript */
+/* RPCA80 Radio Admin Dashboard - Leaflet Version */
 
 let socket = null;
 let map = null;
 let incidents = [];
 let markers = {};
+let liveGpsMarkers = {};
 let soundEnabled = true;
 let currentDetailIncident = null;
 
-// Initialize on page load
+// ===== Initialize =====
+
 document.addEventListener('DOMContentLoaded', function() {
     initializeMap();
     setupEventListeners();
@@ -19,16 +21,21 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(loadIncidents, 30000);
 });
 
-// ===== Initialization =====
+// ===== Map Initialization =====
 
 function initializeMap() {
-    map = L.map('mapContainer').setView([13.7563, 100.5018], 13);
+    const bangkok = [13.7563, 100.5018];
+    map = L.map('mapContainer').setView(bangkok, 13);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19
     }).addTo(map);
+
+    console.log('[Map] Leaflet initialized');
 }
+
+// ===== Event Listeners =====
 
 function setupEventListeners() {
     // Sound toggle
@@ -47,22 +54,30 @@ function setupEventListeners() {
     document.getElementById('exportBtn').addEventListener('click', exportToCSV);
 }
 
+// ===== Socket.IO =====
+
 function setupSocketIO() {
     socket = io();
 
     socket.on('connect', function() {
-        console.log('✓ Connected to server');
-        socket.emit('listening');
+        console.log('[Socket] Connected');
+        socket.emit('join', { room: 'radio_admin' });
     });
 
     socket.on('new_incident', function(data) {
-        console.log('🔔 New incident:', data);
+        console.log('[Socket] New incident:', data);
         playNotificationSound();
+        showNewIncidentAlert(data);
         loadIncidents();
     });
 
+    socket.on('citizen_gps_update', function(data) {
+        console.log('[Socket] GPS Update:', data.username);
+        updateLiveGPSMarker(data);
+    });
+
     socket.on('disconnect', function() {
-        console.log('! Disconnected from server');
+        console.log('[Socket] Disconnected');
     });
 }
 
@@ -79,114 +94,183 @@ async function loadIncidents() {
             updateMap();
         }
     } catch (error) {
-        console.error('Error loading incidents:', error);
+        console.error('[Incidents] Load error:', error);
     }
 }
 
+// ===== Update Stats =====
+
 function updateStats() {
-    const stats = {
-        'new': 0,
-        'accepted': 0,
-        'responding': 0,
-        'closed': 0
+    const counts = {
+        new: 0,
+        accepted: 0,
+        responding: 0,
+        closed: 0
     };
 
     incidents.forEach(inc => {
-        if (stats.hasOwnProperty(inc.status)) {
-            stats[inc.status]++;
+        if (counts.hasOwnProperty(inc.status)) {
+            counts[inc.status]++;
         }
     });
 
-    document.getElementById('countNew').textContent = stats['new'];
-    document.getElementById('countAccepted').textContent = stats['accepted'];
-    document.getElementById('countResponding').textContent = stats['responding'];
-    document.getElementById('countClosed').textContent = stats['closed'];
+    document.getElementById('countNew').textContent = counts.new;
+    document.getElementById('countAccepted').textContent = counts.accepted;
+    document.getElementById('countResponding').textContent = counts.responding;
+    document.getElementById('countClosed').textContent = counts.closed;
 }
 
-function renderIncidents() {
-    const list = document.getElementById('incidentsList');
+// ===== Render Incidents List =====
 
-    if (incidents.length === 0) {
-        list.innerHTML = '<div class="empty-state"><p>📭 ไม่มีเหตุการณ์</p></div>';
+function renderIncidents() {
+    const container = document.getElementById('incidentsList');
+    const filtered = getFilteredIncidents();
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>📭 ไม่มีเหตุการณ์</p></div>';
         return;
     }
 
-    list.innerHTML = incidents.map(inc => createIncidentCard(inc)).join('');
+    let html = '';
+    filtered.forEach(inc => {
+        const statusClass = 'status-' + inc.status;
+        const statusText = getStatusText(inc.status);
+        const typeText = getTypeText(inc.incident_type);
+        const time = new Date(inc.created_at).toLocaleString('th-TH');
 
-    // Add click handlers
-    document.querySelectorAll('.incident-card').forEach(card => {
-        card.addEventListener('click', function() {
-            const incidentId = parseInt(this.dataset.incidentId);
-            showIncidentDetail(incidentId);
-        });
+        html += `
+            <div class="incident-card ${statusClass}">
+                <div class="incident-header">
+                    <span class="incident-ref">${inc.reference_code}</span>
+                    <span class="incident-status">${statusText}</span>
+                </div>
+                <div class="incident-body">
+                    <div class="incident-type">${typeText}</div>
+                    <div class="incident-time">${time}</div>
+                    <div class="incident-location">📍 ${inc.latitude.toFixed(4)}, ${inc.longitude.toFixed(4)}</div>
+                </div>
+                <div class="incident-actions">
+                    <button class="btn-action btn-view" onclick="event.stopPropagation(); showIncidentDetail(${inc.id})">
+                        📋 ดูรายละเอียด
+                    </button>
+                    <button class="btn-action btn-download" onclick="event.stopPropagation(); downloadIncidentReport(${inc.id})">
+                        📄 ดาวน์โหลดรายงาน
+                    </button>
+                </div>
+            </div>
+        `;
     });
+
+    container.innerHTML = html;
 }
 
-function createIncidentCard(incident) {
-    const typeMap = {
-        'accident': '🚗 อุบัติเหตุ',
-        'medical': '🏥 ช่วยเหลือทางการแพทย์',
-        'dispute': '⚠️ ทะเลาะวิวาท',
-        'suspicious': '🕵️ บุคคลน่าสงสัย',
-        'other': '📋 อื่น ๆ'
-    };
-
-    const statusMap = {
-        'new': 'เหตุใหม่',
-        'accepted': 'รับแล้ว',
-        'responding': 'ดำเนินการ',
-        'arrived': 'ถึงแล้ว',
-        'closed': 'ปิด',
-        'cancelled': 'ยกเลิก'
-    };
-
-    const createdAt = new Date(incident.created_at).toLocaleString('th-TH');
-    const typeLabel = typeMap[incident.incident_type] || incident.incident_type;
-
-    return `
-        <div class="incident-card ${incident.status}" data-incident-id="${incident.id}">
-            <div class="incident-header">
-                <span class="incident-code">#${incident.reference_code}</span>
-                <span class="incident-status status-${incident.status}">${statusMap[incident.status]}</span>
-            </div>
-            <div class="incident-meta">
-                <div class="meta-item">📍 ${incident.latitude.toFixed(4)}, ${incident.longitude.toFixed(4)}</div>
-                <div class="meta-item">📅 ${createdAt}</div>
-            </div>
-            <div class="incident-type">${typeLabel}</div>
-            ${incident.details ? `<div class="incident-details">${truncate(incident.details, 100)}</div>` : ''}
-        </div>
-    `;
-}
-
-function truncate(text, length) {
-    return text.length > length ? text.substring(0, length) + '...' : text;
-}
-
-function filterIncidents() {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+function getFilteredIncidents() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
     const statusFilter = document.getElementById('statusFilter').value;
 
-    const filtered = incidents.filter(inc => {
-        const matchSearch = inc.reference_code.toLowerCase().includes(searchTerm) ||
-                          inc.incident_type.toLowerCase().includes(searchTerm);
+    return incidents.filter(inc => {
+        const matchSearch = !search || inc.reference_code.toLowerCase().includes(search);
         const matchStatus = !statusFilter || inc.status === statusFilter;
         return matchSearch && matchStatus;
     });
-
-    // Re-render
-    const list = document.getElementById('incidentsList');
-    list.innerHTML = filtered.map(inc => createIncidentCard(inc)).join('');
-
-    document.querySelectorAll('.incident-card').forEach(card => {
-        card.addEventListener('click', function() {
-            const incidentId = parseInt(this.dataset.incidentId);
-            showIncidentDetail(incidentId);
-        });
-    });
 }
 
-// ===== Incident Detail =====
+function filterIncidents() {
+    renderIncidents();
+    updateMap();
+}
+
+// ===== Map Updates =====
+
+function updateMap() {
+    // Clear existing incident markers
+    Object.values(markers).forEach(marker => map.removeLayer(marker));
+    markers = {};
+
+    const colorMap = {
+        'new': 'red',
+        'accepted': 'orange',
+        'responding': 'blue',
+        'arrived': 'green',
+        'closed': 'grey',
+        'cancelled': 'violet'
+    };
+
+    const filtered = getFilteredIncidents();
+
+    filtered.forEach(inc => {
+        const color = colorMap[inc.status] || 'blue';
+        const iconUrl = `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`;
+
+        const icon = L.icon({
+            iconUrl: iconUrl,
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            iconSize: [25, 41],
+            iconAnchor: [12, 41],
+            popupAnchor: [1, -34],
+            shadowSize: [41, 41]
+        });
+
+        const marker = L.marker([inc.latitude, inc.longitude], { icon: icon }).addTo(map);
+
+        const popupContent = `
+            <div style="min-width:200px;">
+                <strong>${inc.reference_code}</strong><br>
+                <span style="color:#0066cc;">${getStatusText(inc.status)}</span><br>
+                ${getTypeText(inc.incident_type)}<br>
+                <small>${new Date(inc.created_at).toLocaleString('th-TH')}</small><br>
+                <button onclick="showIncidentDetail(${inc.id})" style="margin-top:5px;padding:3px 8px;cursor:pointer;">ดูรายละเอียด</button>
+            </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        markers[inc.id] = marker;
+    });
+
+    // Auto-fit bounds if there are incidents
+    if (filtered.length > 0) {
+        const bounds = L.latLngBounds(filtered.map(inc => [inc.latitude, inc.longitude]));
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }
+
+    console.log('[Map] Updated', filtered.length, 'markers');
+}
+
+function updateLiveGPSMarker(data) {
+    // Remove old marker
+    if (liveGpsMarkers[data.user_id]) {
+        map.removeLayer(liveGpsMarkers[data.user_id]);
+    }
+
+    const blueIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+        opacity: 0.7
+    });
+
+    const marker = L.marker([data.latitude, data.longitude], { icon: blueIcon }).addTo(map);
+
+    const popupContent = `
+        <div style="min-width:150px;">
+            <strong>${data.username}</strong><br>
+            <small style="color:#0066cc;">Real-time GPS</small><br>
+            ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}<br>
+            Accuracy: ${data.accuracy_m ? data.accuracy_m.toFixed(0) + 'm' : '-'}<br>
+            <small>${new Date(data.timestamp).toLocaleTimeString('th-TH')}</small>
+        </div>
+    `;
+
+    marker.bindPopup(popupContent);
+    liveGpsMarkers[data.user_id] = marker;
+
+    console.log('[Map] Live GPS updated for', data.username);
+}
+
+// ===== Incident Detail Modal =====
 
 async function showIncidentDetail(incidentId) {
     try {
@@ -198,7 +282,7 @@ async function showIncidentDetail(incidentId) {
             document.getElementById('detailModal').classList.add('active');
         }
     } catch (error) {
-        console.error('Error:', error);
+        console.error('[Detail] Error:', error);
     }
 }
 
@@ -219,8 +303,6 @@ function displayIncidentDetail(incident) {
         'closed': 'ปิด',
         'cancelled': 'ยกเลิก'
     };
-
-    const osm_url = `https://www.openstreetmap.org/?mlat=${incident.latitude}&mlon=${incident.longitude}&zoom=16`;
 
     let html = `
         <div class="detail-section">
@@ -261,8 +343,8 @@ function displayIncidentDetail(incident) {
                 <label>ที่มา:</label>
                 <code>${incident.location_source === 'gps' ? 'GPS จริง' : 'เลือกด้วยตนเอง'}</code>
             </div>
-            <div style="margin-top: 10px;">
-                <a href="${osm_url}" target="_blank" class="btn btn-secondary">🗺️ เปิดบน OpenStreetMap</a>
+            <div style="margin-top:10px;">
+                <a href="https://www.openstreetmap.org/?mlat=${incident.latitude}&mlon=${incident.longitude}&zoom=16" target="_blank" class="btn btn-secondary">🗺️ เปิดบน OpenStreetMap</a>
             </div>
         </div>
 
@@ -275,7 +357,7 @@ function displayIncidentDetail(incident) {
     if (incident.events && incident.events.length > 0) {
         html += `
             <div class="detail-section">
-                <h3>📍 ประวัติการดำเนินการ</h3>
+                <h3>📋 ประวัติการดำเนินการ</h3>
                 <div class="events-timeline">
         `;
 
@@ -293,36 +375,27 @@ function displayIncidentDetail(incident) {
         html += '</div></div>';
     }
 
-    document.getElementById('incidentDetail').innerHTML = html;
+    document.getElementById('detailModalBody').innerHTML = html;
 
     // Action buttons
-    const actionButtons = document.getElementById('actionButtons');
-    actionButtons.innerHTML = '';
+    const footer = document.getElementById('detailModalFooter');
+    footer.innerHTML = '<button class="btn btn-secondary" onclick="closeDetailModal()">ปิด</button>';
 
     if (incident.status === 'new') {
-        addActionButton(actionButtons, 'btn-primary', '✓ รับเรื่อง', () => updateStatus(incident.id, 'accepted'));
+        addActionButton(footer, 'btn btn-warning', 'รับเรื่อง', () => updateStatus(incident.id, 'accepted'));
+        addActionButton(footer, 'btn btn-danger', 'ยกเลิก', () => showCancelDialog(incident.id));
+    } else if (incident.status === 'accepted') {
+        addActionButton(footer, 'btn btn-primary', 'ประสานสายตรวจ', () => updateStatus(incident.id, 'responding'));
+    } else if (incident.status === 'responding') {
+        addActionButton(footer, 'btn btn-success', 'ถึงที่เกิดเหตุ', () => updateStatus(incident.id, 'arrived'));
+    } else if (incident.status === 'arrived') {
+        addActionButton(footer, 'btn btn-info', 'ปิดเหตุ', () => updateStatus(incident.id, 'closed'));
     }
-
-    if (incident.status === 'accepted') {
-        addActionButton(actionButtons, 'btn-primary', '🚗 ประสานสายตรวจ', () => updateStatus(incident.id, 'responding'));
-        addActionButton(actionButtons, 'btn-danger', 'ยกเลิก', () => showCancelDialog(incident.id));
-    }
-
-    if (incident.status === 'responding') {
-        addActionButton(actionButtons, 'btn-primary', '✓ ถึงแล้ว', () => updateStatus(incident.id, 'arrived'));
-        addActionButton(actionButtons, 'btn-danger', 'ยกเลิก', () => showCancelDialog(incident.id));
-    }
-
-    if (['accepted', 'responding', 'arrived'].includes(incident.status)) {
-        addActionButton(actionButtons, 'btn-secondary', '✓ ปิดเหตุ', () => updateStatus(incident.id, 'closed'));
-    }
-
-    addActionButton(actionButtons, 'btn-secondary', '❌ ปิด', () => closeDetailModal());
 }
 
 function addActionButton(container, className, text, callback) {
     const btn = document.createElement('button');
-    btn.className = `btn ${className}`;
+    btn.className = className;
     btn.textContent = text;
     btn.onclick = callback;
     container.appendChild(btn);
@@ -341,7 +414,7 @@ async function updateStatus(incidentId, newStatus) {
 
         const response = await fetch(`/api/incidents/${incidentId}/status`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 status: newStatus,
                 note: note || ''
@@ -349,145 +422,234 @@ async function updateStatus(incidentId, newStatus) {
         });
 
         if (response.ok) {
-            console.log('✓ Status updated');
+            console.log('[Status] Updated');
             loadIncidents();
             showIncidentDetail(incidentId);
+        } else {
+            alert('อัปเดตสถานะไม่สำเร็จ');
         }
     } catch (error) {
-        console.error('Error:', error);
-        alert('❌ ไม่สามารถอัปเดตสถานะ');
+        console.error('[Status] Error:', error);
     }
 }
+
+// ===== Cancel Incident =====
 
 function showCancelDialog(incidentId) {
-    document.getElementById('cancelDialog').dataset.incidentId = incidentId;
-    document.getElementById('cancelDialog').style.display = 'flex';
-}
-
-function closeCancelDialog() {
-    document.getElementById('cancelDialog').style.display = 'none';
-}
-
-async function confirmCancel() {
-    const incidentId = parseInt(document.getElementById('cancelDialog').dataset.incidentId);
-    const reason = document.getElementById('cancelReason').value.trim();
-
-    if (!reason) {
-        alert('⚠️ กรุณาใส่เหตุผลการยกเลิก');
-        return;
+    const reason = prompt('เหตุผลในการยกเลิก:');
+    if (reason) {
+        cancelIncident(incidentId, reason);
     }
+}
 
+async function cancelIncident(incidentId, reason) {
     try {
         const response = await fetch(`/api/incidents/${incidentId}/cancel`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({reason: reason})
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: reason })
         });
 
         if (response.ok) {
             alert('✓ ยกเลิกเหตุการณ์แล้ว');
-            closeCancelDialog();
             loadIncidents();
             showIncidentDetail(incidentId);
         }
     } catch (error) {
-        console.error('Error:', error);
+        console.error('[Cancel] Error:', error);
     }
 }
 
-// ===== Map =====
-
-function updateMap() {
-    // Clear existing markers
-    Object.values(markers).forEach(marker => marker.remove());
-    markers = {};
-
-    const colorMap = {
-        'new': '#dc3545',
-        'accepted': '#ffc107',
-        'responding': '#17a2b8',
-        'arrived': '#28a745',
-        'closed': '#6c757d'
-    };
-
-    incidents.forEach(incident => {
-        const color = colorMap[incident.status] || '#2a5298';
-        const marker = L.circleMarker([incident.latitude, incident.longitude], {
-            radius: 8,
-            fillColor: color,
-            color: 'white',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).addTo(map);
-
-        marker.bindPopup(`
-            <strong>${incident.reference_code}</strong><br>
-            ${incident.incident_type}<br>
-            <a href="javascript:void(0)" onclick="showIncidentDetail(${incident.id})">ดูรายละเอียด</a>
-        `);
-
-        marker.on('click', function() {
-            showIncidentDetail(incident.id);
-        });
-
-        markers[incident.id] = marker;
-    });
-}
-
-// ===== Export =====
+// ===== Export CSV =====
 
 function exportToCSV() {
-    const headers = ['เลขเหตุ', 'ประเภท', 'สถานะ', 'ละติจูด', 'ลองจิจูด', 'เวลาแจ้ง'];
+    if (incidents.length === 0) {
+        alert('ไม่มีข้อมูลให้ส่งออก');
+        return;
+    }
+
+    const headers = ['เลขเหตุ', 'สถานะ', 'ประเภท', 'รายละเอียด', 'Latitude', 'Longitude', 'เวลาแจ้ง'];
     const rows = incidents.map(inc => [
         inc.reference_code,
-        inc.incident_type,
-        inc.status,
+        getStatusText(inc.status),
+        getTypeText(inc.incident_type),
+        inc.details || '',
         inc.latitude,
         inc.longitude,
         new Date(inc.created_at).toLocaleString('th-TH')
     ]);
 
-    let csv = headers.join(',') + '\n';
+    let csv = '﻿' + headers.join(',') + '\n';
     rows.forEach(row => {
-        csv += row.map(cell => `"${cell}"`).join(',') + '\n';
+        csv += row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',') + '\n';
     });
 
-    const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-
-    link.setAttribute('href', url);
-    link.setAttribute('download', `RPCA80_incidents_${new Date().getTime()}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = 'incidents_' + new Date().toISOString().slice(0, 10) + '.csv';
     link.click();
-    document.body.removeChild(link);
 }
 
-// ===== Audio =====
+// ===== Utility Functions =====
+
+function getStatusText(status) {
+    const map = {
+        'new': 'เหตุใหม่',
+        'accepted': 'รับแล้ว',
+        'responding': 'ดำเนินการ',
+        'arrived': 'ถึงแล้ว',
+        'closed': 'ปิด',
+        'cancelled': 'ยกเลิก'
+    };
+    return map[status] || status;
+}
+
+function getTypeText(type) {
+    const map = {
+        'accident': '🚗 อุบัติเหตุ',
+        'medical': '🏥 ช่วยเหลือทางการแพทย์',
+        'dispute': '⚠️ ทะเลาะวิวาท',
+        'suspicious': '🕵️ บุคคลน่าสงสัย',
+        'other': '📋 อื่น ๆ'
+    };
+    return map[type] || type;
+}
+
+function displayUserInfo() {
+    fetch('/api/user/info')
+        .then(res => res.json())
+        .then(data => {
+            if (data.username) {
+                document.getElementById('userInfo').textContent = data.username;
+            }
+        })
+        .catch(err => console.error('[User] Info error:', err));
+}
 
 function playNotificationSound() {
-    if (!soundEnabled) return;
+    if (soundEnabled) {
+        const audio = document.getElementById('notificationSound');
+        if (audio) audio.play().catch(() => {});
+    }
+}
 
-    const audio = document.getElementById('notificationSound');
-    if (audio) {
-        audio.play().catch(e => console.log('Audio play failed:', e));
+// ===== New Incident Alert =====
+
+function showNewIncidentAlert(data) {
+    // Create alert container if not exists
+    let alertContainer = document.getElementById('incidentAlertContainer');
+    if (!alertContainer) {
+        alertContainer = document.createElement('div');
+        alertContainer.id = 'incidentAlertContainer';
+        alertContainer.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 2000;
+            max-width: 400px;
+        `;
+        document.body.appendChild(alertContainer);
     }
 
-    // Fallback: browser notification
-    if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('RPCA80 - มีเหตุใหม่!', {
-            tag: 'new-incident',
-            requireInteraction: true
+    // Create alert element
+    const alert = document.createElement('div');
+    alert.className = 'incident-alert';
+    alert.style.cssText = `
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        padding: 20px;
+        margin-bottom: 15px;
+        border-left: 5px solid #e74c3c;
+        animation: slideInRight 0.3s ease-out;
+    `;
+
+    alert.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+            <h3 style="margin: 0; color: #e74c3c; font-size: 18px;">🚨 แจ้งเหตุใหม่!</h3>
+            <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <strong>เลขที่:</strong> ${data.reference_code}
+        </div>
+        <div style="margin-bottom: 10px;">
+            <strong>ผู้แจ้ง:</strong> ${data.citizen_name || 'กำลังโหลด...'}
+        </div>
+        <div style="margin-bottom: 10px;">
+            <strong>เวลา:</strong> ${new Date(data.timestamp).toLocaleString('th-TH')}
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button onclick="viewIncidentDetail(${data.id})" style="flex: 1; padding: 10px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                📋 ดูรายละเอียด
+            </button>
+            <button onclick="downloadIncidentReport(${data.id})" style="flex: 1; padding: 10px; background: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                📄 ดาวน์โหลด Word
+            </button>
+        </div>
+        <button onclick="this.parentElement.remove()" style="width: 100%; padding: 10px; margin-top: 10px; background: #95a5a6; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+            ✓ รับทราบ
+        </button>
+    `;
+
+    alertContainer.appendChild(alert);
+
+    // Auto remove after 30 seconds
+    setTimeout(() => {
+        if (alert.parentElement) {
+            alert.remove();
+        }
+    }, 30000);
+}
+
+// ===== Download Incident Report =====
+
+async function downloadIncidentReport(incidentId) {
+    try {
+        const response = await fetch(`/api/incidents/${incidentId}/report/download`);
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `report_${incidentId}.docx`;
+
+            if (contentDisposition) {
+                const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                if (matches != null && matches[1]) {
+                    filename = matches[1].replace(/['"]/g, '');
+                }
+            }
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+
+            console.log('[Download] Report downloaded:', filename);
+            alert('✅ ดาวน์โหลดเอกสารเรียบร้อย');
+        } else if (response.status === 404) {
+            alert('⚠️ ไม่พบเอกสารรายงาน กรุณารอสักครู่และลองใหม่อีกครั้ง');
+        } else {
+            alert('❌ เกิดข้อผิดพลาดในการดาวน์โหลดเอกสาร');
+        }
+    } catch (error) {
+        console.error('[Download] Error:', error);
+        alert('❌ เกิดข้อผิดพลาดในการดาวน์โหลดเอกสาร');
+    }
+}
+
+function viewIncidentDetail(incidentId) {
+    const incident = incidents.find(inc => inc.id === incidentId);
+    if (incident) {
+        showIncidentDetail(incident);
+    } else {
+        loadIncidents().then(() => {
+            const inc = incidents.find(i => i.id === incidentId);
+            if (inc) showIncidentDetail(inc);
         });
     }
 }
-
-// ===== Utilities =====
-
-function displayUserInfo() {
-    document.getElementById('userInfo').textContent = `เจ้าหน้าที่`;
-}
-
-console.log('✓ radio_admin.js loaded');

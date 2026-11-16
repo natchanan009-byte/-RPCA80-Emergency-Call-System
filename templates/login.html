@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RPCA80 - เข้าสู่ระบบ</title>
+    <title>เข้าสู่ระบบ - ระบบแจ้งความออนไลน์</title>
     <style>
         * {
             margin: 0;
@@ -173,13 +173,32 @@
             display: block;
             margin-bottom: 5px;
         }
+
+        .register-link {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .register-link a {
+            color: #2a5298;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .register-link a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="logo">
-            <h1>🚨 RPCA80</h1>
-            <p>ระบบเรียกสายตรวจ 24 ชั่วโมง</p>
+            <h1>🚨 ระบบแจ้งความออนไลน์</h1>
+            <p>เรียกเจ้าหน้าที่ตำรวจ 24 ชั่วโมง</p>
         </div>
 
         <div class="demo-warning">
@@ -203,6 +222,10 @@
 
             <button type="submit">เข้าสู่ระบบ</button>
         </form>
+
+        <div class="register-link">
+            ยังไม่มีบัญชี? <a href="/register">สมัครสมาชิก</a>
+        </div>
 
         <div class="demo-accounts">
             <h4>🔑 บัญชี Demo (สำหรับการทดสอบ)</h4>

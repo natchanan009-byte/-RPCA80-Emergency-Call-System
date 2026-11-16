@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RPCA80 - ห้องวิทยุ</title>
+    <title>ห้องวิทยุ - ระบบแจ้งความออนไลน์</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/radio_admin.css') }}">
 </head>
@@ -11,8 +11,11 @@
     <div id="app" class="radio-admin-app">
         <!-- Header -->
         <header class="header">
-            <h1>📡 RPCA80 - ห้องวิทยุ</h1>
+            <h1>📡 ห้องวิทยุ - ระบบแจ้งความออนไลน์</h1>
             <div class="header-right">
+                <a href="/radio-admin/citizens" class="nav-link" title="จัดการสมาชิกประชาชน">
+                    👥 จัดการสมาชิก
+                </a>
                 <span class="user-info">
                     👤 <span id="userInfo"></span>
                 </span>
@@ -104,16 +107,12 @@
                 <button class="close-btn" onclick="closeDetailModal()">&times;</button>
             </div>
 
-            <div class="modal-body">
-                <div class="incident-detail" id="incidentDetail">
-                    <!-- Loaded by JS -->
-                </div>
+            <div class="modal-body" id="detailModalBody">
+                <!-- Loaded by JS -->
             </div>
 
-            <div class="modal-footer">
-                <div id="actionButtons" class="action-buttons">
-                    <!-- Loaded by JS -->
-                </div>
+            <div class="modal-footer" id="detailModalFooter">
+                <!-- Loaded by JS -->
             </div>
         </div>
     </div>

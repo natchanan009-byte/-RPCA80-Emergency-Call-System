@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สมัครสมาชิก - ระบบแจ้งความออนไลน์</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .register-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #1e3c72;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-group label .required {
+            color: #e74c3c;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #2a5298;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .error-message {
+            background: #ffe6e6;
+            color: #c0392b;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #e74c3c;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(30, 60, 114, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .login-link {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .login-link a {
+            color: #2a5298;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .login-link a:hover {
+            text-decoration: underline;
+        }
+
+        .info-box {
+            background: #e8f4fd;
+            border-left: 4px solid #2a5298;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #2c3e50;
+        }
+
+        @media (max-width: 600px) {
+            .register-container {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="header">
+            <h1>📝 สมัครสมาชิก</h1>
+            <p>ระบบแจ้งความออนไลน์</p>
+        </div>
+
+        {% if error %}
+        <div class="error-message">
+            ⚠️ {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="info-box">
+            ℹ️ หลังจากสมัครสมาชิก ท่านจะต้องรอการอนุมัติจากเจ้าหน้าที่ก่อนเข้าใช้งานระบบ
+        </div>
+
+        <form method="POST" action="/register">
+            <div class="form-group">
+                <label>ชื่อ-นามสกุล <span class="required">*</span></label>
+                <input type="text" name="full_name" required placeholder="กรอกชื่อ-นามสกุลจริง">
+            </div>
+
+            <div class="form-group">
+                <label>เบอร์โทรศัพท์ <span class="required">*</span></label>
+                <input type="tel" name="phone_number" required placeholder="0812345678" pattern="[0-9]{10}">
+            </div>
+
+            <div class="form-group">
+                <label>ที่อยู่ <span class="required">*</span></label>
+                <textarea name="address" required placeholder="กรอกที่อยู่ปัจจุบันของท่าน"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>เลขบัตรประชาชน <span class="required">*</span></label>
+                <input type="text" name="national_id" required placeholder="1234567890123" pattern="[0-9]{13}" maxlength="13">
+            </div>
+
+            <div class="form-group">
+                <label>ชื่อผู้ใช้ (Username) <span class="required">*</span></label>
+                <input type="text" name="username" required placeholder="เลือกชื่อผู้ใช้" minlength="4">
+            </div>
+
+            <div class="form-group">
+                <label>รหัสผ่าน <span class="required">*</span></label>
+                <input type="password" name="password" required placeholder="อย่างน้อย 6 ตัวอักษร" minlength="6">
+            </div>
+
+            <div class="form-group">
+                <label>ยืนยันรหัสผ่าน <span class="required">*</span></label>
+                <input type="password" name="confirm_password" required placeholder="กรอกรหัสผ่านอีกครั้ง" minlength="6">
+            </div>
+
+            <button type="submit" class="btn-primary">สมัครสมาชิก</button>
+        </form>
+
+        <div class="login-link">
+            มีบัญชีอยู่แล้ว? <a href="/login">เข้าสู่ระบบ</a>
+        </div>
+    </div>
+
+    <script>
+        // Validate phone number
+        document.querySelector('input[name="phone_number"]').addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // Validate national ID
+        document.querySelector('input[name="national_id"]').addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        // Validate password match on submit
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const password = document.querySelector('input[name="password"]').value;
+            const confirmPassword = document.querySelector('input[name="confirm_password"]').value;
+
+            if (password !== confirmPassword) {
+                e.preventDefault();
+                alert('รหัสผ่านไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง');
+            }
+        });
+    </script>
+</body>
+</html>

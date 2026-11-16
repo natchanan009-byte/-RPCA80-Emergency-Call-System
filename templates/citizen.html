@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RPCA80 - เรียกสายตรวจ</title>
+    <title>ระบบแจ้งความออนไลน์</title>
+    <!-- Leaflet Maps (Free, no API key) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/citizen.css') }}">
 </head>
@@ -12,7 +13,7 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1>🚨 RPCA80 เรียกสายตรวจ</h1>
+                <h1>🚨 ระบบแจ้งความออนไลน์</h1>
                 <div class="header-right">
                     <span class="user-info" id="userInfo"></span>
                     <a href="/logout" class="logout-btn">ออก</a>
@@ -62,10 +63,10 @@
                 </div>
             </section>
 
-            <!-- Map Section -->
+            <!-- Map Section (Google Maps) -->
             <section class="map-section">
                 <div class="card">
-                    <h2>🗺️ แผนที่</h2>
+                    <h2>🗺️ แผนที่ตำแหน่งของคุณ</h2>
                     <div id="map" class="map-container"></div>
                     <p class="map-help">คลิกบนแผนที่เพื่อเลือกตำแหน่งด้วยตนเอง</p>
                 </div>
@@ -178,9 +179,7 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+    <!-- Leaflet Maps -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/citizen.js') }}"></script>
-</body>
-</html>

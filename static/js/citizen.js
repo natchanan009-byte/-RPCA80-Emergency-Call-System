@@ -1,4 +1,4 @@
-/* RPCA80 Citizen Interface JavaScript */
+/* RPCA80 Citizen Interface - Leaflet Version */
 
 let currentStep = 1;
 let currentLocation = null;
@@ -10,106 +10,257 @@ let selectedMarker = null;
 let gpsWatchId = null;
 let enableSwipe = true;
 let swipeStartX = 0;
+let isMouseDown = false;
 
-// Initialize on page load
+// ===== Initialize =====
+
 document.addEventListener('DOMContentLoaded', function() {
-    initializeMap();
+    initMap();
     requestGPS();
     setupEventListeners();
     setupSocketIO();
     displayUserInfo();
 });
 
-// ===== Initialization =====
+// ===== Leaflet Map Init =====
 
-function initializeMap() {
-    map = L.map('map').setView([13.7563, 100.5018], 13); // Bangkok default
+function initMap() {
+    try {
+        const bangkok = [13.7563, 100.5018];
+        map = L.map('map').setView(bangkok, 13);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap',
-        maxZoom: 19
-    }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+            maxZoom: 19
+        }).addTo(map);
 
-    // Click to select location
-    map.on('click', function(e) {
-        selectLocationOnMap(e.latlng.lat, e.latlng.lng, false);
-    });
-}
+        // Click to select location
+        map.on('click', function(e) {
+            placeManualMarker(e.latlng.lat, e.latlng.lng);
+        });
 
-function requestGPS() {
-    if (navigator.geolocation) {
-        showGPSStatus('loading');
-
-        navigator.geolocation.watchPosition(
-            function(position) {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                const accuracy = position.coords.accuracy;
-
-                currentLocation = {
-                    latitude: lat,
-                    longitude: lng,
-                    accuracy: accuracy,
-                    timestamp: new Date(),
-                    source: 'gps'
-                };
-
-                updateGPSDisplay();
-                updateMapMarker(lat, lng, true);
-                closeGPSWarnings();
-            },
-            function(error) {
-                handleGPSError(error);
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 10000,
-                maximumAge: 0
-            }
-        );
-    } else {
-        showGPSWarning('เบราว์เซอร์นี้ไม่รองรับ GPS');
-        showGPSStatus('error');
+        console.log('[Map] Leaflet initialized');
+    } catch (err) {
+        console.error('[Map] Init error:', err);
     }
 }
 
-function setupEventListeners() {
-    // Swipe to call
-    const swipeBar = document.getElementById('swipeBar');
-    swipeBar.addEventListener('touchstart', handleSwipeStart, false);
-    swipeBar.addEventListener('touchmove', handleSwipeMove, false);
-    swipeBar.addEventListener('touchend', handleSwipeEnd, false);
+// ===== GPS =====
 
-    // Mouse swipe support
-    swipeBar.addEventListener('mousedown', handleSwipeStart, false);
-    swipeBar.addEventListener('mousemove', handleSwipeMove, false);
-    swipeBar.addEventListener('mouseup', handleSwipeEnd, false);
-    swipeBar.addEventListener('mouseleave', handleSwipeEnd, false);
+function requestGPS() {
+    if (!navigator.geolocation) {
+        showGPSError('เบราว์เซอร์นี้ไม่รองรับ GPS');
+        return;
+    }
+
+    setGPSStatus('loading', 'กำลังขอตำแหน่ง GPS...');
+
+    gpsWatchId = navigator.geolocation.watchPosition(
+        function(pos) {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const acc = pos.coords.accuracy;
+
+            currentLocation = {
+                latitude: lat,
+                longitude: lng,
+                accuracy: acc,
+                source: 'gps',
+                timestamp: new Date()
+            };
+
+            // Update UI
+            setGPSStatus('ok', 'GPS พร้อม');
+            document.getElementById('latitudeValue').textContent = lat.toFixed(6);
+            document.getElementById('longitudeValue').textContent = lng.toFixed(6);
+            document.getElementById('accuracyValue').textContent = acc ? acc.toFixed(0) + ' เมตร' : '-';
+            document.getElementById('timestampValue').textContent = new Date().toLocaleString('th-TH');
+            document.getElementById('gpsDetails').style.display = 'block';
+
+            // Place marker
+            placeGPSMarker(lat, lng);
+
+            // Accuracy warning
+            if (acc > 200) {
+                showGPSWarning('ความแม่นยำต่ำ (' + acc.toFixed(0) + 'ม.) ลองออกไปที่โล่ง');
+            } else {
+                document.getElementById('gpsWarnings').innerHTML = '';
+            }
+
+            // Send real-time GPS
+            sendLiveGPS(lat, lng, acc);
+        },
+        function(err) {
+            let msg = 'ไม่สามารถดึง GPS ได้';
+            if (err.code === 1) msg = 'ไม่ได้รับอนุญาต GPS — กรุณากดอนุญาตในเบราว์เซอร์';
+            if (err.code === 2) msg = 'ไม่พบสัญญาณ GPS';
+            if (err.code === 3) msg = 'หมดเวลารอ GPS';
+            showGPSError(msg);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+}
+
+function setGPSStatus(type, msg) {
+    const el = document.getElementById('gpsStatus');
+    if (type === 'loading') {
+        el.innerHTML = '<div class="status-loading"><div class="spinner"></div><p>' + msg + '</p></div>';
+    } else if (type === 'ok') {
+        el.innerHTML = '<div class="status-ok" style="color:#28a745;font-weight:600;padding:10px;">✓ ' + msg + '</div>';
+    } else if (type === 'error') {
+        el.innerHTML = '<div class="status-error" style="color:#dc3545;padding:10px;">✗ ' + msg + '</div>';
+    }
+}
+
+function showGPSError(msg) {
+    setGPSStatus('error', msg);
+    const w = document.getElementById('gpsWarnings');
+    w.innerHTML = '<div class="warning">⚠ ' + msg + '<br><small>คุณยังสามารถเลือกตำแหน่งบนแผนที่ด้วยตนเองได้</small></div>';
+}
+
+function showGPSWarning(msg) {
+    const w = document.getElementById('gpsWarnings');
+    w.innerHTML = '<div class="warning">⚠ ' + msg + '</div>';
+}
+
+// ===== Leaflet Markers =====
+
+function placeGPSMarker(lat, lng) {
+    if (currentMarker) map.removeLayer(currentMarker);
+
+    const blueIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+    });
+
+    currentMarker = L.marker([lat, lng], { icon: blueIcon }).addTo(map);
+    currentMarker.bindPopup('<b>ตำแหน่งของคุณ (GPS)</b><br>' + lat.toFixed(5) + ', ' + lng.toFixed(5)).openPopup();
+    map.setView([lat, lng], 16);
+}
+
+function placeManualMarker(lat, lng) {
+    if (selectedMarker) map.removeLayer(selectedMarker);
+
+    const yellowIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-gold.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+    });
+
+    selectedMarker = L.marker([lat, lng], { icon: yellowIcon }).addTo(map);
+    selectedMarker.bindPopup('<b>ตำแหน่งที่คุณเลือก</b><br>' + lat.toFixed(5) + ', ' + lng.toFixed(5)).openPopup();
+
+    // Store location data for submission
+    selectedMarker.locationData = {
+        latitude: lat,
+        longitude: lng,
+        accuracy: null,
+        source: 'manual',
+        timestamp: new Date()
+    };
+
+    map.setView([lat, lng], 16);
+    console.log('[Map] Manual location selected:', lat, lng);
+}
+
+// ===== Real-time GPS =====
+
+function sendLiveGPS(lat, lng, acc) {
+    if (!socket || !socket.connected) return;
+    fetch('/api/location/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            latitude: lat,
+            longitude: lng,
+            accuracy_m: acc || null
+        })
+    }).catch(err => console.error('[GPS] Send error:', err));
+}
+
+// ===== Socket.IO =====
+
+function setupSocketIO() {
+    socket = io();
+
+    socket.on('connect', function() {
+        console.log('[Socket] Connected');
+    });
+
+    socket.on('incident_status_updated', function(data) {
+        if (currentIncident && currentIncident.id === data.incident_id) {
+            updateStatusNote(data.status);
+        }
+    });
+
+    socket.on('incident_cancelled', function(data) {
+        if (currentIncident && currentIncident.id === data.incident_id) {
+            document.getElementById('statusNote').textContent = 'ยกเลิก: ' + data.reason;
+        }
+    });
+
+    socket.on('disconnect', function() {
+        console.log('[Socket] Disconnected');
+    });
+}
+
+// ===== Event Listeners =====
+
+function setupEventListeners() {
+    // Swipe bar
+    const bar = document.getElementById('swipeBar');
+    bar.addEventListener('mousedown', e => {
+        isMouseDown = true;
+        swipeStartX = e.clientX;
+    });
+    bar.addEventListener('mousemove', e => {
+        if (!isMouseDown) return;
+        animateSwipe(e.clientX - swipeStartX, bar);
+    });
+    bar.addEventListener('mouseup', e => {
+        finishSwipe(e.clientX - swipeStartX, bar);
+        isMouseDown = false;
+    });
+    bar.addEventListener('mouseleave', e => {
+        if (isMouseDown) finishSwipe(e.clientX - swipeStartX, bar);
+        isMouseDown = false;
+    });
+
+    bar.addEventListener('touchstart', e => {
+        swipeStartX = e.touches[0].clientX;
+    }, { passive: true });
+    bar.addEventListener('touchmove', e => {
+        animateSwipe(e.touches[0].clientX - swipeStartX, bar);
+    }, { passive: true });
+    bar.addEventListener('touchend', e => {
+        finishSwipe(e.changedTouches[0].clientX - swipeStartX, bar);
+    });
 
     // Button toggle
     document.getElementById('enableButtonToggle').addEventListener('change', function() {
         const btn = document.getElementById('callButton');
-        const bar = document.getElementById('swipeBar');
-
+        const swipe = document.getElementById('swipeBar');
         if (this.checked) {
             btn.style.display = 'block';
-            bar.style.display = 'none';
+            swipe.style.display = 'none';
             enableSwipe = false;
         } else {
             btn.style.display = 'none';
-            bar.style.display = 'block';
+            swipe.style.display = 'block';
             enableSwipe = true;
         }
     });
 
-    // Call button click
-    document.getElementById('callButton').addEventListener('click', initiateCall);
+    document.getElementById('callButton').addEventListener('click', openReportModal);
 
-    // Modal buttons
-    document.getElementById('nextBtn').addEventListener('click', nextStep);
-    document.getElementById('backBtn').addEventListener('click', previousStep);
-
-    // Type selection
+    // Type buttons
     document.querySelectorAll('.type-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
@@ -117,266 +268,106 @@ function setupEventListeners() {
         });
     });
 
-    // Details checkbox
+    // No-details checkbox - FIX: ไม่ควร disable textarea
     document.getElementById('noDetailsCheckbox').addEventListener('change', function() {
-        const textarea = document.getElementById('detailsInput');
-        textarea.disabled = this.checked;
-        textarea.value = '';
-    });
-}
-
-function setupSocketIO() {
-    socket = io();
-
-    socket.on('connect', function() {
-        console.log('✓ Connected to server');
-    });
-
-    socket.on('incident_status_updated', function(data) {
-        if (currentIncident && currentIncident.id === data.incident_id) {
-            showStatusUpdate(data.status);
+        const ta = document.getElementById('detailsInput');
+        if (this.checked) {
+            ta.value = '';
+            ta.placeholder = '(ข้ามรายละเอียด)';
+        } else {
+            ta.placeholder = 'อธิบายรายละเอียดของเหตุการณ์ (ไม่บังคับ)';
         }
     });
-
-    socket.on('incident_cancelled', function(data) {
-        if (currentIncident && currentIncident.id === data.incident_id) {
-            showCancellationNotice(data.reason);
-        }
-    });
-
-    socket.on('disconnect', function() {
-        console.log('! Disconnected from server');
-    });
 }
 
-// ===== GPS Functions =====
+// ===== Display User Info =====
 
-function updateGPSDisplay() {
-    if (!currentLocation) return;
+function displayUserInfo() {
+    fetch('/api/user/info')
+        .then(res => res.json())
+        .then(data => {
+            if (data.username) {
+                document.getElementById('userInfo').textContent = data.username;
+            }
+        })
+        .catch(err => console.error('[User] Info error:', err));
+}
 
-    const gpsDetails = document.getElementById('gpsDetails');
-    const gpsStatus = document.getElementById('gpsStatus');
+// ===== Swipe Logic =====
 
-    gpsStatus.innerHTML = '<div class="status-ok">✓ ตำแหน่ง GPS พร้อม</div>';
-    gpsStatus.style.display = 'block';
+function animateSwipe(diff, bar) {
+    if (!enableSwipe || diff < 0) return;
+    const max = bar.offsetWidth * 0.7;
+    const translate = Math.min(diff, max);
+    bar.style.transform = 'translateX(' + translate + 'px)';
+    bar.style.opacity = String(1 - (translate / max) * 0.4);
+}
 
-    document.getElementById('latitudeValue').textContent = currentLocation.latitude.toFixed(6);
-    document.getElementById('longitudeValue').textContent = currentLocation.longitude.toFixed(6);
-    document.getElementById('accuracyValue').textContent =
-        currentLocation.accuracy ? `${currentLocation.accuracy.toFixed(0)} เมตร` : 'ไม่ทราบ';
-    document.getElementById('timestampValue').textContent =
-        new Date(currentLocation.timestamp).toLocaleString('th-TH');
-
-    gpsDetails.style.display = 'block';
-
-    // Check accuracy
-    if (currentLocation.accuracy > 100) {
-        showGPSWarning('⚠️ ความแม่นยำต่ำ (' + currentLocation.accuracy.toFixed(0) + 'ม) อาจต้องใช้เวลา');
+function finishSwipe(diff, bar) {
+    bar.style.transform = '';
+    bar.style.opacity = '1';
+    if (enableSwipe && diff > bar.offsetWidth * 0.6) {
+        openReportModal();
     }
 }
 
-function showGPSStatus(type) {
-    const gpsStatus = document.getElementById('gpsStatus');
+// ===== Report Modal =====
 
-    if (type === 'loading') {
-        gpsStatus.innerHTML = `
-            <div class="status-loading">
-                <div class="spinner"></div>
-                <p>กำลังขอตำแหน่ง GPS...</p>
-            </div>
-        `;
-    } else if (type === 'error') {
-        gpsStatus.innerHTML = `
-            <div class="status-error" style="color: #dc3545;">
-                ❌ GPS ไม่พร้อม
-            </div>
-        `;
-    }
-}
-
-function handleGPSError(error) {
-    let message = '';
-
-    if (error.code === error.PERMISSION_DENIED) {
-        message = 'ไม่ได้รับอนุญาต GPS โปรดเปิดสิทธิ์';
-    } else if (error.code === error.POSITION_UNAVAILABLE) {
-        message = 'ข้อมูลตำแหน่งไม่พร้อม';
-    } else if (error.code === error.TIMEOUT) {
-        message = 'หมดเวลาการรอ GPS';
-    }
-
-    showGPSWarning(message);
-    showGPSStatus('error');
-}
-
-function showGPSWarning(message) {
-    const warnings = document.getElementById('gpsWarnings');
-    const warning = document.createElement('div');
-    warning.className = 'warning';
-    warning.innerHTML = '⚠️ ' + message;
-    warnings.appendChild(warning);
-}
-
-function closeGPSWarnings() {
-    const warnings = document.getElementById('gpsWarnings');
-    // Keep showing warnings but don't add duplicates
-}
-
-function updateMapMarker(lat, lng, isUser = false) {
-    if (currentMarker) {
-        map.removeLayer(currentMarker);
-    }
-
-    const icon = L.icon({
-        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4IiBmaWxsPSIjMjA4MWM2Ii8+PHBhdGggZmlsbD0iIzMzMzMzMyIgZD0iTTExIDEwaDJ2NGgtMnoiLz48cGF0aCBmaWxsPSIjMzMzMzMzIiBkPSJNMTAgMTNoNHYyaC00eiIvPjwvc3ZnPg==',\n        iconSize: [32, 32],\n        iconAnchor: [16, 16],\n        popupAnchor: [0, -16]\n    });
-
-    currentMarker = L.marker([lat, lng], {icon: icon}).addTo(map);\n    map.setView([lat, lng], 16);
-}
-
-function selectLocationOnMap(lat, lng, isManual = true) {
-    selectedMarker = {
-        latitude: lat,
-        longitude: lng,
-        accuracy: null,
-        timestamp: new Date(),
-        source: 'manual'
-    };
-
-    const icon = L.icon({
-        iconUrl: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0Ij48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIGZpbGw9IiNmZmMxMDciIHJ4PSI0Ii8+PHRleHQgeD0iNiIgeT0iMTgiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtd2VpZ2h0PSJib2xkIj7im5I8L3RleHQ+PC9zdmc+',\n        iconSize: [32, 32],\n        iconAnchor: [16, 32],
-        popupAnchor: [0, -32]
-    });
-
-    if (selectedMarker) {
-        map.removeLayer(selectedMarker);
-    }
-
-    selectedMarker = L.marker([lat, lng], {icon: icon}).addTo(map);
-    map.setView([lat, lng], 16);
-}
-
-// ===== Swipe to Call =====
-
-function handleSwipeStart(e) {
-    if (!enableSwipe) return;
-
-    swipeStartX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-    const swipeBar = document.getElementById('swipeBar');
-    swipeBar.style.cursor = 'grabbing';
-}
-
-function handleSwipeMove(e) {
-    if (!enableSwipe || swipeStartX === 0) return;
-
-    const swipeBar = document.getElementById('swipeBar');
-    const currentX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
-    const diff = currentX - swipeStartX;
-    const threshold = swipeBar.offsetWidth * 0.7;
-
-    if (diff > 0) {
-        swipeBar.style.transform = `translateX(${Math.min(diff, threshold)}px)`;
-        swipeBar.style.opacity = 1 - (diff / threshold) * 0.3;
-    }
-
-    if (diff > threshold) {
-        swipeBar.classList.add('complete');
-    } else {
-        swipeBar.classList.remove('complete');
-    }
-}
-
-function handleSwipeEnd(e) {
-    if (!enableSwipe) return;
-
-    const swipeBar = document.getElementById('swipeBar');
-    const currentX = e.type.includes('touch') ? (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) : e.clientX;
-    const diff = currentX - swipeStartX;
-    const threshold = swipeBar.offsetWidth * 0.7;
-
-    swipeBar.style.transform = '';
-    swipeBar.style.opacity = 1;
-    swipeBar.classList.remove('swiping', 'complete');
-    swipeStartX = 0;
-
-    if (diff > threshold) {
-        initiateCall();
-    }
-}
-
-function initiateCall() {
-    if (!currentLocation && !selectedMarker) {
-        alert('⚠️ กรุณารอ GPS พร้อมหรือเลือกตำแหน่งบนแผนที่');
+function openReportModal() {
+    const loc = currentLocation || (selectedMarker && selectedMarker.locationData);
+    if (!loc) {
+        alert('กรุณารอ GPS หรือคลิกบนแผนที่เพื่อเลือกตำแหน่ง');
         return;
     }
 
-    const location = currentLocation || selectedMarker;
-    openModal();
-}
-
-// ===== Modal & Steps =====
-
-function openModal() {
-    document.getElementById('reportModal').classList.add('active');
     currentStep = 1;
-    showStep(1);
-
-    // Reset form
+    // Reset
     document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
     document.getElementById('detailsInput').value = '';
-    document.getElementById('detailsInput').disabled = false;
+    document.getElementById('detailsInput').placeholder = 'อธิบายรายละเอียดของเหตุการณ์ (ไม่บังคับ)';
     document.getElementById('noDetailsCheckbox').checked = false;
+
+    showStep(1);
+    document.getElementById('reportModal').classList.add('active');
 }
 
 function closeModal() {
     document.getElementById('reportModal').classList.remove('active');
-    currentStep = 1;
 }
 
 function showStep(step) {
-    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-    document.getElementById(`step${step}`).classList.add('active');
+    document.querySelectorAll('.step').forEach(s => {
+        s.style.display = 'none';
+        s.classList.remove('active');
+    });
 
-    const backBtn = document.getElementById('backBtn');
+    const el = document.getElementById('step' + step);
+    el.style.display = 'block';
+    el.classList.add('active');
+
+    document.getElementById('backBtn').style.display = step > 1 ? 'inline-block' : 'none';
     const nextBtn = document.getElementById('nextBtn');
-    const cancelBtn = document.getElementById('cancelBtn');
+    nextBtn.style.display = 'inline-block';
+    nextBtn.textContent = step === 3 ? 'ยืนยันเรียกตำรวจ' : 'ถัดไป';
+    nextBtn.disabled = false;
 
-    if (step === 1) {
-        backBtn.style.display = 'none';
-        nextBtn.textContent = 'ถัดไป';
-        nextBtn.onclick = nextStep;
-    } else if (step === 2) {
-        backBtn.style.display = 'inline-block';
-        nextBtn.textContent = 'ถัดไป';
-        nextBtn.onclick = nextStep;
-    } else if (step === 3) {
-        backBtn.style.display = 'inline-block';
-        prepareConfirmStep();
-        nextBtn.textContent = 'ยืนยัน';
-        nextBtn.onclick = nextStep;
-    } else if (step === 4) {
-        backBtn.style.display = 'none';
-        nextBtn.style.display = 'none';
-        cancelBtn.textContent = 'ปิด';
-        cancelBtn.onclick = closeModal;
-    }
+    if (step === 3) fillConfirmStep();
 }
 
 function nextStep() {
     if (currentStep === 1) {
-        const selectedType = document.querySelector('.type-btn.selected');
-        if (!selectedType) {
-            alert('⚠️ กรุณาเลือกประเภทเหตุ');
+        if (!document.querySelector('.type-btn.selected')) {
+            alert('กรุณาเลือกประเภทเหตุก่อน');
             return;
         }
         currentStep = 2;
+        showStep(2);
     } else if (currentStep === 2) {
         currentStep = 3;
+        showStep(3);
     } else if (currentStep === 3) {
         submitIncident();
-        return;
     }
-
-    showStep(currentStep);
 }
 
 function previousStep() {
@@ -386,82 +377,91 @@ function previousStep() {
     }
 }
 
-function prepareConfirmStep() {
-    const location = currentLocation || selectedMarker;
-    const selectedType = document.querySelector('.type-btn.selected');
+function fillConfirmStep() {
+    const loc = currentLocation || (selectedMarker && selectedMarker.locationData);
+    const typeBtn = document.querySelector('.type-btn.selected');
 
-    document.getElementById('confirmType').textContent = selectedType.textContent;
-    document.getElementById('confirmLocation').textContent =
-        `${location.latitude.toFixed(4)}, ${location.longitude.toFixed(4)}`;
-    document.getElementById('confirmAccuracy').textContent =
-        location.accuracy ? `${location.accuracy.toFixed(0)} เมตร` : 'ไม่ทราบ';
-    document.getElementById('confirmSource').textContent =
-        location.source === 'gps' ? 'GPS จริง' : 'เลือกด้วยตนเอง';
+    document.getElementById('confirmType').textContent = typeBtn ? typeBtn.textContent : '-';
+    document.getElementById('confirmLocation').textContent = loc.latitude.toFixed(5) + ', ' + loc.longitude.toFixed(5);
+    document.getElementById('confirmAccuracy').textContent = loc.accuracy ? loc.accuracy.toFixed(0) + ' เมตร' : 'ไม่ทราบ';
+    document.getElementById('confirmSource').textContent = loc.source === 'gps' ? 'GPS จริง' : 'เลือกด้วยตนเอง';
 }
 
 // ===== Submit Incident =====
 
 async function submitIncident() {
-    const location = currentLocation || selectedMarker;
-    const selectedType = document.querySelector('.type-btn.selected');
-    const details = document.getElementById('detailsInput').value.trim();
+    const loc = currentLocation || (selectedMarker && selectedMarker.locationData);
+    if (!loc) {
+        alert('ไม่พบตำแหน่ง');
+        return;
+    }
+
+    const typeBtn = document.querySelector('.type-btn.selected');
+    if (!typeBtn) {
+        alert('กรุณาเลือกประเภทเหตุ');
+        return;
+    }
+
+    const nextBtn = document.getElementById('nextBtn');
+    nextBtn.disabled = true;
+    nextBtn.textContent = 'กำลังส่ง...';
 
     const payload = {
-        incident_type: selectedType.dataset.type,
-        details: details,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy_m: location.accuracy || null,
-        location_source: location.source
+        incident_type: typeBtn.dataset.type,
+        details: document.getElementById('detailsInput').value.trim(),
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        accuracy_m: loc.accuracy || null,
+        location_source: loc.source
     };
 
+    console.log('[Submit] Payload:', payload);
+
     try {
-        const response = await fetch('/api/incidents/create', {
+        const res = await fetch('/api/incidents/create', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
-        if (response.ok) {
-            const data = await response.json();
-            currentIncident = data;
+        const data = await res.json();
+        console.log('[Submit] Response:', data);
 
+        if (res.ok && data.reference_code) {
+            currentIncident = data;
             document.getElementById('referenceCode').textContent = data.reference_code;
             document.getElementById('statusNote').textContent = 'รอเจ้าหน้าที่รับเรื่อง...';
 
-            currentStep = 4;
+            // Hide footer buttons on success
+            document.getElementById('backBtn').style.display = 'none';
+            nextBtn.style.display = 'none';
+            document.getElementById('cancelBtn').textContent = 'ปิด';
+
             showStep(4);
 
-            // Join incident room for updates
-            socket.emit('join_incident_room', {incident_id: data.id});
+            if (socket && data.id) {
+                socket.emit('join', { room: 'incident_' + data.id });
+            }
         } else {
-            alert('❌ ส่งรายงานไม่สำเร็จ');
+            alert('ส่งไม่สำเร็จ: ' + (data.error || 'ไม่ทราบสาเหตุ'));
+            nextBtn.disabled = false;
+            nextBtn.textContent = 'ยืนยันเรียกตำรวจ';
         }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('❌ เกิดข้อผิดพลาด');
+    } catch (err) {
+        console.error('[Submit] Error:', err);
+        alert('เกิดข้อผิดพลาด: ' + err.message);
+        nextBtn.disabled = false;
+        nextBtn.textContent = 'ยืนยันเรียกตำรวจ';
     }
 }
 
-function showStatusUpdate(status) {
-    const statusMap = {
-        'new': 'เหตุใหม่',
-        'accepted': '✓ เจ้าหน้าที่รับเรื่องแล้ว',
-        'responding': '🚗 สายตรวจกำลังเข้าที่',
-        'arrived': '✓ สายตรวจถึงแล้ว',
-        'closed': 'ปิด',
-        'cancelled': '❌ ยกเลิก'
+function updateStatusNote(status) {
+    const map = {
+        'accepted': 'เจ้าหน้าที่รับเรื่องแล้ว',
+        'responding': 'สายตรวจกำลังเดินทาง',
+        'arrived': 'สายตรวจถึงที่เกิดเหตุแล้ว',
+        'closed': 'ปิดเหตุแล้ว',
+        'cancelled': 'ยกเลิก'
     };
-
-    document.getElementById('statusNote').textContent = statusMap[status] || 'อัปเดตสถานะ';
+    document.getElementById('statusNote').textContent = map[status] || status;
 }
-
-function showCancellationNotice(reason) {
-    document.getElementById('statusNote').textContent = `❌ ยกเลิกแล้ว (${reason})`;
-}
-
-function displayUserInfo() {
-    document.getElementById('userInfo').textContent = `👤 ${document.body.dataset.username || 'ประชาชน'}`;
-}
-
-console.log('✓ citizen.js loaded');

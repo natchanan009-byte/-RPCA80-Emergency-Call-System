@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>จัดการสมาชิกประชาชน - ระบบแจ้งความออนไลน์</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f6fa;
+        }
+
+        .navbar {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .navbar h1 {
+            font-size: 22px;
+        }
+
+        .navbar-links a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+            padding: 8px 16px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+
+        .navbar-links a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        .stat-card p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .stat-card.total h3 { color: #3498db; }
+        .stat-card.pending h3 { color: #f39c12; }
+        .stat-card.approved h3 { color: #27ae60; }
+        .stat-card.rejected h3 { color: #e74c3c; }
+        .stat-card.suspended h3 { color: #95a5a6; }
+
+        .main-panel {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            padding: 25px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .panel-header h2 {
+            color: #2c3e50;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 8px 16px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .filter-btn.active {
+            background: #2a5298;
+            color: white;
+            border-color: #2a5298;
+        }
+
+        .search-box {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            width: 250px;
+            font-size: 14px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #2a5298;
+        }
+
+        .citizens-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .citizens-table th {
+            background: #f8f9fa;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #2c3e50;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .citizens-table td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .citizens-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-approved {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-rejected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-suspended {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            margin: 0 3px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .btn-view {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-approve {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-reject {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-suspend {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-activate {
+            background: #16a085;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
+            color: #2c3e50;
+        }
+
+        .close-modal {
+            font-size: 28px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close-modal:hover {
+            color: #333;
+        }
+
+        .detail-row {
+            margin-bottom: 15px;
+        }
+
+        .detail-row label {
+            display: block;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 5px;
+        }
+
+        .detail-row .value {
+            color: #333;
+            font-size: 15px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .panel-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .search-box {
+                width: 100%;
+            }
+
+            .citizens-table {
+                font-size: 12px;
+            }
+
+            .citizens-table th, .citizens-table td {
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>📋 จัดการสมาชิกประชาชน - ระบบแจ้งความออนไลน์</h1>
+        <div class="navbar-links">
+            <a href="/radio-admin">🏠 กลับหน้าหลัก</a>
+            <a href="/logout">🚪 ออกจากระบบ</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="stats-grid">
+            <div class="stat-card total">
+                <h3 id="stat-total">{{ stats.total or 0 }}</h3>
+                <p>สมาชิกทั้งหมด</p>
+            </div>
+            <div class="stat-card pending">
+                <h3 id="stat-pending">{{ stats.pending or 0 }}</h3>
+                <p>รออนุมัติ</p>
+            </div>
+            <div class="stat-card approved">
+                <h3 id="stat-approved">{{ stats.approved or 0 }}</h3>
+                <p>อนุมัติแล้ว</p>
+            </div>
+            <div class="stat-card rejected">
+                <h3 id="stat-rejected">{{ stats.rejected or 0 }}</h3>
+                <p>ไม่อนุมัติ</p>
+            </div>
+            <div class="stat-card suspended">
+                <h3 id="stat-suspended">{{ stats.suspended or 0 }}</h3>
+                <p>ระงับ</p>
+            </div>
+        </div>
+
+        <div class="main-panel">
+            <div class="panel-header">
+                <h2>รายชื่อสมาชิก</h2>
+                <div class="filter-group">
+                    <button class="filter-btn active" data-filter="all">ทั้งหมด</button>
+                    <button class="filter-btn" data-filter="pending">รออนุมัติ</button>
+                    <button class="filter-btn" data-filter="approved">อนุมัติแล้ว</button>
+                    <button class="filter-btn" data-filter="rejected">ไม่อนุมัติ</button>
+                    <button class="filter-btn" data-filter="suspended">ระงับ</button>
+                </div>
+                <input type="text" id="searchBox" class="search-box" placeholder="🔍 ค้นหา ชื่อ / เบอร์ / Username...">
+            </div>
+
+            <div id="loadingIndicator" class="loading">
+                กำลังโหลดข้อมูล...
+            </div>
+
+            <table class="citizens-table" id="citizensTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>ชื่อ-นามสกุล</th>
+                        <th>เบอร์โทร</th>
+                        <th>Username</th>
+                        <th>เลขบัตรประชาชน</th>
+                        <th>สถานะ</th>
+                        <th>วันที่สมัคร</th>
+                        <th>การจัดการ</th>
+                    </tr>
+                </thead>
+                <tbody id="citizensTableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal สำหรับแสดงรายละเอียด -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>รายละเอียดสมาชิก</h3>
+                <span class="close-modal" onclick="closeModal()">&times;</span>
+            </div>
+            <div id="detailContent"></div>
+        </div>
+    </div>
+
+    <script>
+        let allCitizens = [];
+        let currentFilter = 'all';
+        let searchQuery = '';
+
+        // Load citizens on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCitizens();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // Filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    currentFilter = this.dataset.filter;
+                    filterCitizens();
+                });
+            });
+
+            // Search box
+            document.getElementById('searchBox').addEventListener('input', function() {
+                searchQuery = this.value.toLowerCase();
+                filterCitizens();
+            });
+        }
+
+        async function loadCitizens() {
+            try {
+                const response = await fetch('/api/citizens');
+                const data = await response.json();
+                allCitizens = data.citizens;
+
+                document.getElementById('loadingIndicator').style.display = 'none';
+                document.getElementById('citizensTable').style.display = 'table';
+
+                filterCitizens();
+            } catch (error) {
+                console.error('Error loading citizens:', error);
+                document.getElementById('loadingIndicator').innerHTML = '❌ เกิดข้อผิดพลาดในการโหลดข้อมูล';
+            }
+        }
+
+        function filterCitizens() {
+            let filtered = allCitizens;
+
+            // Apply status filter
+            if (currentFilter !== 'all') {
+                filtered = filtered.filter(c => c.approval_status === currentFilter);
+            }
+
+            // Apply search
+            if (searchQuery) {
+                filtered = filtered.filter(c =>
+                    c.full_name.toLowerCase().includes(searchQuery) ||
+                    c.phone_number.includes(searchQuery) ||
+                    c.username.toLowerCase().includes(searchQuery)
+                );
+            }
+
+            renderCitizens(filtered);
+        }
+
+        function renderCitizens(citizens) {
+            const tbody = document.getElementById('citizensTableBody');
+
+            if (citizens.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:#999;">ไม่พบข้อมูลสมาชิก</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = citizens.map(citizen => `
+                <tr>
+                    <td>${citizen.full_name}</td>
+                    <td>${citizen.phone_number}</td>
+                    <td>${citizen.username}</td>
+                    <td>${citizen.national_id_masked}</td>
+                    <td>${getStatusBadge(citizen.approval_status)}</td>
+                    <td>${formatDate(citizen.created_at)}</td>
+                    <td>
+                        <button class="action-btn btn-view" onclick="viewDetail(${citizen.id})">ดูรายละเอียด</button>
+                        ${getActionButtons(citizen)}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function getStatusBadge(status) {
+            const badges = {
+                'pending': '<span class="status-badge status-pending">รออนุมัติ</span>',
+                'approved': '<span class="status-badge status-approved">อนุมัติแล้ว</span>',
+                'rejected': '<span class="status-badge status-rejected">ไม่อนุมัติ</span>',
+                'suspended': '<span class="status-badge status-suspended">ระงับ</span>'
+            };
+            return badges[status] || status;
+        }
+
+        function getActionButtons(citizen) {
+            if (citizen.approval_status === 'pending') {
+                return `
+                    <button class="action-btn btn-approve" onclick="approveCitizen(${citizen.id})">อนุมัติ</button>
+                    <button class="action-btn btn-reject" onclick="rejectCitizen(${citizen.id})">ไม่อนุมัติ</button>
+                `;
+            } else if (citizen.approval_status === 'approved') {
+                return `<button class="action-btn btn-suspend" onclick="suspendCitizen(${citizen.id})">ระงับ</button>`;
+            } else if (citizen.approval_status === 'suspended') {
+                return `<button class="action-btn btn-activate" onclick="activateCitizen(${citizen.id})">เปิดใช้งาน</button>`;
+            }
+            return '';
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('th-TH', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        async function viewDetail(profileId) {
+            try {
+                const response = await fetch(`/api/citizens/${profileId}`);
+                const data = await response.json();
+                const citizen = data.citizen;
+
+                const detailHTML = `
+                    <div class="detail-row">
+                        <label>ชื่อ-นามสกุล:</label>
+                        <div class="value">${citizen.full_name}</div>
+                    </div>
+                    <div class="detail-row">
+                        <label>เบอร์โทรศัพท์:</label>
+                        <div class="value">${citizen.phone_number}</div>
+                    </div>
+                    <div class="detail-row">
+                        <label>ที่อยู่:</label>
+                        <div class="value">${citizen.address}</div>
+                    </div>
+                    <div class="detail-row">
+                        <label>เลขบัตรประชาชน:</label>
+                        <div class="value">${citizen.national_id}</div>
+                    </div>
+                    <div class="detail-row">
+                        <label>Username:</label>
+                        <div class="value">${citizen.username}</div>
+                    </div>
+                    <div class="detail-row">
+                        <label>สถานะ:</label>
+                        <div class="value">${getStatusBadge(citizen.approval_status)}</div>
+                    </div>
+                    <div class="detail-row">
+                        <label>วันที่สมัคร:</label>
+                        <div class="value">${formatDate(citizen.created_at)}</div>
+                    </div>
+                    ${citizen.approved_by_username ? `
+                    <div class="detail-row">
+                        <label>ผู้อนุมัติ:</label>
+                        <div class="value">${citizen.approved_by_username} (${formatDate(citizen.approved_at)})</div>
+                    </div>
+                    ` : ''}
+                    ${citizen.rejection_reason ? `
+                    <div class="detail-row">
+                        <label>เหตุผลที่ไม่อนุมัติ:</label>
+                        <div class="value">${citizen.rejection_reason}</div>
+                    </div>
+                    ` : ''}
+                `;
+
+                document.getElementById('detailContent').innerHTML = detailHTML;
+                document.getElementById('detailModal').classList.add('active');
+            } catch (error) {
+                console.error('Error loading detail:', error);
+                alert('เกิดข้อผิดพลาดในการโหลดรายละเอียด');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('active');
+        }
+
+        async function approveCitizen(profileId) {
+            if (!confirm('ยืนยันการอนุมัติสมาชิกคนนี้?')) return;
+
+            try {
+                const response = await fetch(`/api/citizens/${profileId}/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    alert('✅ อนุมัติสมาชิกเรียบร้อย');
+                    loadCitizens();
+                    location.reload();
+                } else {
+                    alert('❌ เกิดข้อผิดพลาด');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ เกิดข้อผิดพลาดในการอนุมัติ');
+            }
+        }
+
+        async function rejectCitizen(profileId) {
+            const reason = prompt('กรุณาระบุเหตุผลที่ไม่อนุมัติ (ถ้ามี):');
+            if (reason === null) return; // User cancelled
+
+            try {
+                const response = await fetch(`/api/citizens/${profileId}/reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason })
+                });
+
+                if (response.ok) {
+                    alert('✅ ไม่อนุมัติสมาชิกแล้ว');
+                    loadCitizens();
+                    location.reload();
+                } else {
+                    alert('❌ เกิดข้อผิดพลาด');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ เกิดข้อผิดพลาดในการไม่อนุมัติ');
+            }
+        }
+
+        async function suspendCitizen(profileId) {
+            const reason = prompt('กรุณาระบุเหตุผลในการระงับบัญชี:');
+            if (reason === null) return;
+
+            try {
+                const response = await fetch(`/api/citizens/${profileId}/suspend`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reason })
+                });
+
+                if (response.ok) {
+                    alert('✅ ระงับบัญชีสมาชิกแล้ว');
+                    loadCitizens();
+                    location.reload();
+                } else {
+                    alert('❌ เกิดข้อผิดพลาด');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ เกิดข้อผิดพลาด');
+            }
+        }
+
+        async function activateCitizen(profileId) {
+            if (!confirm('ยืนยันการเปิดใช้งานบัญชีสมาชิกคนนี้?')) return;
+
+            try {
+                const response = await fetch(`/api/citizens/${profileId}/activate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (response.ok) {
+                    alert('✅ เปิดใช้งานบัญชีสมาชิกแล้ว');
+                    loadCitizens();
+                    location.reload();
+                } else {
+                    alert('❌ เกิดข้อผิดพลาด');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ เกิดข้อผิดพลาด');
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('detailModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>

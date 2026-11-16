@@ -49,6 +49,36 @@ html, body, #app {
     z-index: 1000;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.nav-link {
+    color: white;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    transition: background 0.3s;
+    font-size: 14px;
+}
+
+.nav-link:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(100px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
 .header h1 {
     font-size: 24px;
     font-weight: 700;
@@ -624,4 +654,47 @@ textarea:focus {
     .btn {
         width: 100%;
     }
+}
+
+/* Incident Actions Buttons */
+.incident-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.btn-action {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 5px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-action:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.btn-view {
+    background: #3498db;
+    color: white;
+}
+
+.btn-view:hover {
+    background: #2980b9;
+}
+
+.btn-download {
+    background: #27ae60;
+    color: white;
+}
+
+.btn-download:hover {
+    background: #229954;
 }
